@@ -4,6 +4,7 @@
 UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
 Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
        python search.py "<query>" --design-system [-p "Project Name"]
+       python search.py "<query>" --brand-system [-p "Project Name"]
        python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
        python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
 
@@ -31,8 +32,8 @@ import sys
 import io
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, UNTRUNCATED_COLS, search, search_stack
 from design_system import generate_design_system
+from brand_system import generate_brand_system
 
-# Force UTF-8 for stdout/stderr to handle emojis on Windows (cp1252 default)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
@@ -93,37 +94,35 @@ if __name__ == "__main__":
     parser.add_argument("--max-results", "-n", type=int, default=MAX_RESULTS, help="Max results (default: 3)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--full", action="store_true", help="Do not truncate long field values in text output")
-    # Design system generation
     parser.add_argument("--design-system", "-ds", action="store_true", help="Generate complete design system recommendation")
-    parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design system output")
+    parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
+    parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
-    # Persistence (Master + Overrides pattern)
     parser.add_argument("--persist", action="store_true", help="Save design system to design-system/<project-slug>/MASTER.md (creates hierarchical structure)")
     parser.add_argument("--page", type=str, default=None, help="Create page-specific override file in design-system/<project-slug>/pages/")
     parser.add_argument("--output-dir", "-o", type=str, default=None, help="Output directory for persisted files (default: current directory -- pass this explicitly, pointed at the project root)")
     parser.add_argument("--force", action="store_true", help="Overwrite an existing MASTER.md when persisting (default: skip if it already exists)")
-    # Design dials (1-10), only applied with --design-system
     parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10", help="DESIGN_VARIANCE dial: 1=centered/minimal, 10=bold/asymmetric (only with --design-system)")
     parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10", help="MOTION_INTENSITY dial: 1=subtle, 10=complex; pulls a matching GSAP snippet from motion.csv (only with --design-system)")
     parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10", help="VISUAL_DENSITY dial: 1=spacious, 10=dense/dashboard; overrides the spacing scale (only with --design-system)")
 
     args = parser.parse_args()
 
-    # Design system takes priority
-    if args.design_system:
-        result = generate_design_system(
-            args.query,
-            args.project_name,
-            args.format,
-            persist=args.persist,
-            page=args.page,
-            output_dir=args.output_dir,
-            variance=args.variance,
-            motion=args.motion,
-            density=args.density,
-            force=args.force,
-        )
+    if args.design_system and args.brand_system:
+        parser.error("--design-system and --brand-system are mutually exclusive")
 
+    if args.brand_system:
+        result = generate_brand_system(args.query, args.project_name)
+        if args.json:
+            print(json_module.dumps(result["brand_system"], indent=2, ensure_ascii=False))
+        else:
+            print(result["text"])
+    elif args.design_system:
+        result = generate_design_system(
+            args.query, args.project_name, args.format,
+            persist=args.persist, page=args.page, output_dir=args.output_dir,
+            variance=args.variance, motion=args.motion, density=args.density, force=args.force,
+        )
         if args.json:
             print(json_module.dumps(
                 {"design_system": result["design_system"], "persistence": result["persistence"]},
@@ -131,7 +130,6 @@ if __name__ == "__main__":
             ))
         else:
             print(result["text"])
-
             if args.persist:
                 persistence = result["persistence"] or {}
                 print("\n" + "=" * 60)
@@ -146,14 +144,12 @@ if __name__ == "__main__":
                     print(f"📖 Usage: When building a page, check {ds_dir}/pages/[page].md first.")
                     print("   If it exists, its rules override MASTER.md. Otherwise, use MASTER.md.")
                 print("=" * 60)
-    # Stack search
     elif args.stack:
         result = search_stack(args.query, args.stack, args.max_results)
         if args.json:
             print(json_module.dumps(result, indent=2, ensure_ascii=False))
         else:
             print(format_output(result, full=args.full))
-    # Domain search
     else:
         result = search(args.query, args.domain, args.max_results)
         if args.json:
