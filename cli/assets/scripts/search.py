@@ -46,7 +46,6 @@ def format_output(result, full=False):
     """Format results for Claude consumption (token-optimized)"""
     if "error" in result:
         return f"Error: {result['error']}"
-
     output = []
     if result.get("stack"):
         output.append("## UI Pro Max Stack Guidelines")
@@ -61,19 +60,12 @@ def format_output(result, full=False):
             domain_note += ")"
         output.append(f"**Domain:** {domain_note} | **Query:** {result['query']}")
     output.append(f"**Source:** {result['file']} | **Found:** {result['count']} results\n")
-
     if result['count'] == 0:
-        output.append(
-            "No matches. This is not a match with an empty value -- the query "
-            "did not hit the database. Retry with broader/different keywords "
-            "before falling back to general defaults, and say explicitly that "
-            "no database match was found if you do fall back."
-        )
+        output.append("No matches. This is not a match with an empty value -- the query did not hit the database. Retry with broader/different keywords before falling back to general defaults, and say explicitly that no database match was found if you do fall back.")
         suggestions = result.get("suggestions") or []
         if suggestions:
             output.append(f"**Closest known terms:** {', '.join(suggestions)}")
         return "\n".join(output)
-
     for i, row in enumerate(result['results'], 1):
         output.append(f"### Result {i}")
         for key, value in row.items():
@@ -82,7 +74,6 @@ def format_output(result, full=False):
                 value_str = value_str[:TRUNCATE_AT] + "..."
             output.append(f"- **{key}:** {value_str}")
         output.append("")
-
     return "\n".join(output)
 
 
@@ -105,29 +96,16 @@ if __name__ == "__main__":
     parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10", help="DESIGN_VARIANCE dial: 1=centered/minimal, 10=bold/asymmetric (only with --design-system)")
     parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10", help="MOTION_INTENSITY dial: 1=subtle, 10=complex; pulls a matching GSAP snippet from motion.csv (only with --design-system)")
     parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10", help="VISUAL_DENSITY dial: 1=spacious, 10=dense/dashboard; overrides the spacing scale (only with --design-system)")
-
     args = parser.parse_args()
-
     if args.design_system and args.brand_system:
         parser.error("--design-system and --brand-system are mutually exclusive")
-
     if args.brand_system:
         result = generate_brand_system(args.query, args.project_name)
-        if args.json:
-            print(json_module.dumps(result["brand_system"], indent=2, ensure_ascii=False))
-        else:
-            print(result["text"])
+        print(json_module.dumps(result["brand_system"], indent=2, ensure_ascii=False) if args.json else result["text"])
     elif args.design_system:
-        result = generate_design_system(
-            args.query, args.project_name, args.format,
-            persist=args.persist, page=args.page, output_dir=args.output_dir,
-            variance=args.variance, motion=args.motion, density=args.density, force=args.force,
-        )
+        result = generate_design_system(args.query, args.project_name, args.format, persist=args.persist, page=args.page, output_dir=args.output_dir, variance=args.variance, motion=args.motion, density=args.density, force=args.force)
         if args.json:
-            print(json_module.dumps(
-                {"design_system": result["design_system"], "persistence": result["persistence"]},
-                indent=2, ensure_ascii=False,
-            ))
+            print(json_module.dumps({"design_system": result["design_system"], "persistence": result["persistence"]}, indent=2, ensure_ascii=False))
         else:
             print(result["text"])
             if args.persist:
@@ -146,13 +124,7 @@ if __name__ == "__main__":
                 print("=" * 60)
     elif args.stack:
         result = search_stack(args.query, args.stack, args.max_results)
-        if args.json:
-            print(json_module.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print(format_output(result, full=args.full))
+        print(json_module.dumps(result, indent=2, ensure_ascii=False) if args.json else format_output(result, full=args.full))
     else:
         result = search(args.query, args.domain, args.max_results)
-        if args.json:
-            print(json_module.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            print(format_output(result, full=args.full))
+        print(json_module.dumps(result, indent=2, ensure_ascii=False) if args.json else format_output(result, full=args.full))
