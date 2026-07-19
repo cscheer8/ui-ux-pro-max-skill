@@ -4,6 +4,7 @@
 UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
 Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
        python search.py "<query>" --design-system [-p "Project Name"]
+       python search.py "<query>" --brand-system [-p "Project Name"]
        python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
        python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
 
@@ -31,6 +32,7 @@ import sys
 import io
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, UNTRUNCATED_COLS, search, search_stack
 from design_system import generate_design_system
+from brand_system import generate_brand_system
 
 # Force UTF-8 for stdout/stderr to handle emojis on Windows (cp1252 default)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
@@ -93,9 +95,10 @@ if __name__ == "__main__":
     parser.add_argument("--max-results", "-n", type=int, default=MAX_RESULTS, help="Max results (default: 3)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--full", action="store_true", help="Do not truncate long field values in text output")
-    # Design system generation
+    # Design and brand system generation
     parser.add_argument("--design-system", "-ds", action="store_true", help="Generate complete design system recommendation")
-    parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design system output")
+    parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
+    parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
     # Persistence (Master + Overrides pattern)
     parser.add_argument("--persist", action="store_true", help="Save design system to design-system/<project-slug>/MASTER.md (creates hierarchical structure)")
@@ -109,8 +112,18 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Design system takes priority
-    if args.design_system:
+    if args.design_system and args.brand_system:
+        parser.error("--design-system and --brand-system are mutually exclusive")
+
+    # Brand system takes priority over ordinary searches
+    if args.brand_system:
+        result = generate_brand_system(args.query, args.project_name)
+        if args.json:
+            print(json_module.dumps(result["brand_system"], indent=2, ensure_ascii=False))
+        else:
+            print(result["text"])
+    # Design system generation
+    elif args.design_system:
         result = generate_design_system(
             args.query,
             args.project_name,
