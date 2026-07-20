@@ -5,25 +5,13 @@ UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
 Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
        python search.py "<query>" --design-system [-p "Project Name"]
        python search.py "<query>" --brand-system [-p "Project Name"]
+       python search.py "<query>" --brand-system --persist -p "Project Name" --output-dir "<project-root>"
        python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
        python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
 
 Domains: style, color, chart, landing, product, ux, typography, google-fonts, icons, gsap, react, web
 Stacks: react, nextjs, vue, svelte, astro, swiftui, react-native, flutter, nuxtjs, nuxt-ui,
         html-tailwind, shadcn, jetpack-compose, threejs, angular, laravel
-
-Design dials (1-10, only with --design-system):
-  --variance   DESIGN_VARIANCE: 1=centered/minimal, 10=bold/asymmetric
-  --motion     MOTION_INTENSITY: 1=subtle, 10=complex; attaches a GSAP snippet from motion.csv
-  --density    VISUAL_DENSITY: 1=spacious, 10=dense/dashboard; overrides the spacing scale
-
-Persistence (Master + Overrides pattern):
-  --persist      Save design system to design-system/<project-slug>/MASTER.md
-  --output-dir   Directory the design-system/ folder is created under (defaults to cwd --
-                 always pass this explicitly, pointed at the project root)
-  --page         Also create a page-specific override file in design-system/<project-slug>/pages/
-  --force        Overwrite an existing MASTER.md (without this, persistence is skipped
-                 if MASTER.md already exists, so prior design decisions aren't lost)
 """
 
 import argparse
@@ -43,7 +31,7 @@ TRUNCATE_AT = 300
 
 
 def format_output(result, full=False):
-    """Format results for Claude consumption (token-optimized)"""
+    """Format results for Claude consumption (token-optimized)."""
     if "error" in result:
         return f"Error: {result['error']}"
     output = []
@@ -77,6 +65,19 @@ def format_output(result, full=False):
     return "\n".join(output)
 
 
+def print_persistence(result: dict, label: str) -> None:
+    persistence = result.get("persistence") or {}
+    print("\n" + "=" * 60)
+    if persistence.get("status") == "skipped_exists":
+        print(f"⚠️  {persistence.get('message', 'Existing system was not overwritten.')}")
+    else:
+        target = persistence.get("brand_system_dir") or persistence.get("design_system_dir") or f"{label}/<project>"
+        print(f"✅ {label.replace('-', ' ').title()} persisted to {target}/")
+        for filename in persistence.get("created_files", []):
+            print(f"   📄 {filename}")
+    print("=" * 60)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UI Pro Max Search")
     parser.add_argument("query", help="Search query")
@@ -89,39 +90,37 @@ if __name__ == "__main__":
     parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
     parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
-    parser.add_argument("--persist", action="store_true", help="Save design system to design-system/<project-slug>/MASTER.md (creates hierarchical structure)")
-    parser.add_argument("--page", type=str, default=None, help="Create page-specific override file in design-system/<project-slug>/pages/")
-    parser.add_argument("--output-dir", "-o", type=str, default=None, help="Output directory for persisted files (default: current directory -- pass this explicitly, pointed at the project root)")
-    parser.add_argument("--force", action="store_true", help="Overwrite an existing MASTER.md when persisting (default: skip if it already exists)")
-    parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10", help="DESIGN_VARIANCE dial: 1=centered/minimal, 10=bold/asymmetric (only with --design-system)")
-    parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10", help="MOTION_INTENSITY dial: 1=subtle, 10=complex; pulls a matching GSAP snippet from motion.csv (only with --design-system)")
-    parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10", help="VISUAL_DENSITY dial: 1=spacious, 10=dense/dashboard; overrides the spacing scale (only with --design-system)")
+    parser.add_argument("--persist", action="store_true", help="Persist the generated design or brand system")
+    parser.add_argument("--page", type=str, default=None, help="Create page-specific override file for a design system")
+    parser.add_argument("--output-dir", "-o", type=str, default=None, help="Project root under which the system folder is created")
+    parser.add_argument("--force", action="store_true", help="Overwrite an existing persisted system")
+    parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10", help="DESIGN_VARIANCE dial (only with --design-system)")
+    parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10", help="MOTION_INTENSITY dial (only with --design-system)")
+    parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10", help="VISUAL_DENSITY dial (only with --design-system)")
     args = parser.parse_args()
+
     if args.design_system and args.brand_system:
         parser.error("--design-system and --brand-system are mutually exclusive")
+    if args.persist and not (args.design_system or args.brand_system):
+        parser.error("--persist requires --design-system or --brand-system")
+
     if args.brand_system:
-        result = generate_brand_system(args.query, args.project_name)
-        print(json_module.dumps(result["brand_system"], indent=2, ensure_ascii=False) if args.json else result["text"])
+        result = generate_brand_system(
+            args.query,
+            args.project_name,
+            output_format="json" if args.json else "markdown",
+            persist=args.persist,
+            output_dir=args.output_dir,
+            force=args.force,
+        )
+        print(json_module.dumps({"brand_system": result["brand_system"], "persistence": result["persistence"]}, indent=2, ensure_ascii=False) if args.json else result["text"])
+        if args.persist and not args.json:
+            print_persistence(result, "brand-system")
     elif args.design_system:
         result = generate_design_system(args.query, args.project_name, args.format, persist=args.persist, page=args.page, output_dir=args.output_dir, variance=args.variance, motion=args.motion, density=args.density, force=args.force)
-        if args.json:
-            print(json_module.dumps({"design_system": result["design_system"], "persistence": result["persistence"]}, indent=2, ensure_ascii=False))
-        else:
-            print(result["text"])
-            if args.persist:
-                persistence = result["persistence"] or {}
-                print("\n" + "=" * 60)
-                if persistence.get("status") == "skipped_exists":
-                    print(f"⚠️  {persistence.get('message', 'MASTER.md already exists; not overwritten.')}")
-                else:
-                    ds_dir = persistence.get("design_system_dir", "design-system/<project>")
-                    print(f"✅ Design system persisted to {ds_dir}/")
-                    for f in persistence.get("created_files", []):
-                        print(f"   📄 {f}")
-                    print("")
-                    print(f"📖 Usage: When building a page, check {ds_dir}/pages/[page].md first.")
-                    print("   If it exists, its rules override MASTER.md. Otherwise, use MASTER.md.")
-                print("=" * 60)
+        print(json_module.dumps({"design_system": result["design_system"], "persistence": result["persistence"]}, indent=2, ensure_ascii=False) if args.json else result["text"])
+        if args.persist and not args.json:
+            print_persistence(result, "design-system")
     elif args.stack:
         result = search_stack(args.query, args.stack, args.max_results)
         print(json_module.dumps(result, indent=2, ensure_ascii=False) if args.json else format_output(result, full=args.full))
