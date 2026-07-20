@@ -71,23 +71,39 @@ def main() -> int:
             "-p",
             "FieldOps Pro",
             "--persist",
+            "--generate-assets",
             "--output-dir",
             temp_dir,
         )
-        assert_success(persisted, "Persisted brand-system command")
+        assert_success(persisted, "Persisted brand asset command")
         brand_dir = Path(temp_dir) / "brand-system" / "fieldops-pro"
         required_files = [
             brand_dir / "MASTER.md",
             brand_dir / "brand-system.json",
             brand_dir / "assets" / "logo-brief.md",
             brand_dir / "tokens" / "semantic-brand-tokens.json",
+            brand_dir / "assets" / "icon-system.md",
+            brand_dir / "assets" / "image-direction.md",
+            brand_dir / "assets" / "social-kit.md",
+            brand_dir / "assets" / "presentation-system.md",
+            brand_dir / "assets" / "generation-prompts.json",
+            brand_dir / "exports" / "svg" / "emblem-template.svg",
         ]
         for path in required_files:
             if not path.exists():
                 raise AssertionError(f"Missing persisted file: {path}")
-        tokens = json.loads(required_files[-1].read_text(encoding="utf-8"))
+
+        tokens = json.loads((brand_dir / "tokens" / "semantic-brand-tokens.json").read_text(encoding="utf-8"))
         if tokens["color"]["brand"]["primary"]["$type"] != "color":
             raise AssertionError("Semantic token output is malformed")
+
+        prompts = json.loads((brand_dir / "assets" / "generation-prompts.json").read_text(encoding="utf-8"))
+        for key in ["logo", "icon_system", "imagery", "social_kit", "presentation"]:
+            if key not in prompts or not prompts[key].get("prompt"):
+                raise AssertionError(f"Missing generated prompt: {key}")
+        svg = (brand_dir / "exports" / "svg" / "emblem-template.svg").read_text(encoding="utf-8")
+        if "<svg" not in svg or "FieldOps Pro" not in svg:
+            raise AssertionError("SVG export is malformed")
 
         skipped = run(
             "oilfield operations software rugged trustworthy modern",
@@ -108,6 +124,7 @@ def main() -> int:
             "-p",
             "FieldOps Pro",
             "--persist",
+            "--generate-assets",
             "--output-dir",
             temp_dir,
             "--force",
@@ -123,6 +140,10 @@ def main() -> int:
     invalid_persist = run("test", "--persist")
     if invalid_persist.returncode == 0 or "requires" not in invalid_persist.stderr:
         raise AssertionError("--persist without a system mode should fail")
+
+    invalid_assets = run("test", "--brand-system", "--generate-assets")
+    if invalid_assets.returncode == 0 or "requires --brand-system --persist" not in invalid_assets.stderr:
+        raise AssertionError("--generate-assets without persistence should fail")
 
     print("Brand system smoke tests passed.")
     return 0
