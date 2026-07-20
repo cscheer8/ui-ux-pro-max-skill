@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'feat/brand-*'
+      - 'feat/presentation-*'
   workflow_dispatch:
 
 permissions:
