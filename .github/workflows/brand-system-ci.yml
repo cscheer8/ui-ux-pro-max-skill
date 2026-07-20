@@ -31,9 +31,13 @@ jobs:
       - name: Run brand system smoke tests
         run: python scripts/test-brand-system.py
 
+      - name: Run brand audit smoke tests
+        run: python scripts/test-brand-audit.py
+
       - name: Compile Python modules
         run: |
           python -m py_compile src/ui-ux-pro-max/scripts/core.py
           python -m py_compile src/ui-ux-pro-max/scripts/design_system.py
           python -m py_compile src/ui-ux-pro-max/scripts/brand_system.py
+          python -m py_compile src/ui-ux-pro-max/scripts/brand_audit.py
           python -m py_compile src/ui-ux-pro-max/scripts/search.py
