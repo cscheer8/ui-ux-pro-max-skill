@@ -113,7 +113,11 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             force=args.force,
         )
-        print(json_module.dumps({"brand_system": result["brand_system"], "persistence": result["persistence"]}, indent=2, ensure_ascii=False) if args.json else result["text"])
+        if args.json:
+            payload = {"brand_system": result["brand_system"], "persistence": result["persistence"]} if args.persist else result["brand_system"]
+            print(json_module.dumps(payload, indent=2, ensure_ascii=False))
+        else:
+            print(result["text"])
         if args.persist and not args.json:
             print_persistence(result, "brand-system")
     elif args.design_system:
