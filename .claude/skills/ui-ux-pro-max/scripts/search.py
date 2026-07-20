@@ -103,6 +103,7 @@ if __name__ == "__main__":
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--design-system", "-ds", action="store_true")
     parser.add_argument("--brand-system", "-bs", action="store_true")
+    parser.add_argument("--complete-brand-package", action="store_true", help="Generate the persisted brand system, asset briefs, presentation system, and all token exports")
     parser.add_argument("--generate-assets", action="store_true")
     parser.add_argument("--presentation-system", action="store_true")
     parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch")
@@ -120,6 +121,13 @@ if __name__ == "__main__":
     parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10")
     parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10")
     args = parser.parse_args()
+
+    if args.complete_brand_package:
+        args.brand_system = True
+        args.persist = True
+        args.generate_assets = True
+        args.presentation_system = True
+        args.export_tokens = True
 
     if args.design_system and args.brand_system:
         parser.error("--design-system and --brand-system are mutually exclusive")
