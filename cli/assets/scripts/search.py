@@ -13,6 +13,7 @@ from brand_system import generate_brand_system
 from asset_persist import persist_asset_package
 from presentation_system import persist_presentation_system
 from token_exports import SUPPORTED_FORMATS, export_tokens
+from brand_audit import audit_brand_system
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -75,6 +76,12 @@ def print_persistence(result: dict, label: str) -> None:
             print(f"\n{heading}:")
             for filename in generated.get("created_files", []):
                 print(f"   📄 {filename}")
+    audit = result.get("brand_audit") or {}
+    if audit.get("status") == "completed":
+        print(f"\n🔎 Brand audit completed: {audit.get('score', 0)}/100")
+        print(f"   Errors: {audit.get('summary', {}).get('error', 0)} | Warnings: {audit.get('summary', {}).get('warning', 0)}")
+        for filename in audit.get("created_files", []):
+            print(f"   📄 {filename}")
     print("=" * 60)
 
 
@@ -101,6 +108,8 @@ if __name__ == "__main__":
     parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch")
     parser.add_argument("--export-tokens", action="store_true", help="Export persisted semantic tokens for production use")
     parser.add_argument("--token-formats", type=parse_formats, default=list(SUPPORTED_FORMATS), help="Comma-separated: css,tailwind,typescript")
+    parser.add_argument("--audit-brand", action="store_true", help="Audit a project directory against the persisted brand system")
+    parser.add_argument("--audit-path", default=None, help="Project file or directory to scan during a brand audit")
     parser.add_argument("--project-name", "-p", default=None)
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii")
     parser.add_argument("--persist", action="store_true")
@@ -124,17 +133,25 @@ if __name__ == "__main__":
         parser.error("--deck-type requires --presentation-system")
     if args.export_tokens and not (args.brand_system and args.persist):
         parser.error("--export-tokens requires --brand-system --persist")
+    if args.audit_brand and not (args.brand_system and args.persist and args.audit_path):
+        parser.error("--audit-brand requires --brand-system --persist --audit-path")
+    if args.audit_path and not args.audit_brand:
+        parser.error("--audit-path requires --audit-brand")
 
     if args.brand_system:
         result = generate_brand_system(args.query, args.project_name, output_format="json" if args.json else "markdown", persist=args.persist, output_dir=args.output_dir, force=args.force)
         result["asset_generation"] = persist_asset_package(result["brand_system"], result["persistence"]) if args.generate_assets else None
         result["presentation_generation"] = persist_presentation_system(result["brand_system"], result["persistence"], args.deck_type) if args.presentation_system else None
         result["token_exports"] = export_tokens(result["brand_system"], result["persistence"], args.token_formats) if args.export_tokens else None
+        result["brand_audit"] = audit_brand_system(result["brand_system"], result["persistence"], args.audit_path) if args.audit_brand else None
         if args.json:
             payload = result["brand_system"] if not args.persist else {
-                "brand_system": result["brand_system"], "persistence": result["persistence"],
-                "asset_generation": result["asset_generation"], "presentation_generation": result["presentation_generation"],
+                "brand_system": result["brand_system"],
+                "persistence": result["persistence"],
+                "asset_generation": result["asset_generation"],
+                "presentation_generation": result["presentation_generation"],
                 "token_exports": result["token_exports"],
+                "brand_audit": result["brand_audit"],
             }
             print(json_module.dumps(payload, indent=2, ensure_ascii=False))
         else:
