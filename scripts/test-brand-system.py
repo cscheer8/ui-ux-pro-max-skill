@@ -72,10 +72,13 @@ def main() -> int:
             "FieldOps Pro",
             "--persist",
             "--generate-assets",
+            "--presentation-system",
+            "--deck-type",
+            "executive",
             "--output-dir",
             temp_dir,
         )
-        assert_success(persisted, "Persisted brand asset command")
+        assert_success(persisted, "Persisted brand and presentation command")
         brand_dir = Path(temp_dir) / "brand-system" / "fieldops-pro"
         required_files = [
             brand_dir / "MASTER.md",
@@ -88,6 +91,11 @@ def main() -> int:
             brand_dir / "assets" / "presentation-system.md",
             brand_dir / "assets" / "generation-prompts.json",
             brand_dir / "exports" / "svg" / "emblem-template.svg",
+            brand_dir / "presentations" / "PRESENTATION-SYSTEM.md",
+            brand_dir / "presentations" / "executive-deck-outline.md",
+            brand_dir / "presentations" / "slide-layouts.json",
+            brand_dir / "presentations" / "chart-style.json",
+            brand_dir / "presentations" / "generation-prompts.json",
         ]
         for path in required_files:
             if not path.exists():
@@ -101,6 +109,17 @@ def main() -> int:
         for key in ["logo", "icon_system", "imagery", "social_kit", "presentation"]:
             if key not in prompts or not prompts[key].get("prompt"):
                 raise AssertionError(f"Missing generated prompt: {key}")
+
+        presentation = json.loads((brand_dir / "presentations" / "generation-prompts.json").read_text(encoding="utf-8"))
+        if presentation["deck_type"] != "executive" or len(presentation["outline"]) < 6:
+            raise AssertionError("Presentation outline output is malformed")
+        layouts = json.loads((brand_dir / "presentations" / "slide-layouts.json").read_text(encoding="utf-8"))
+        if layouts["grid"]["columns"] != 12 or "comparison" not in layouts["layouts"]:
+            raise AssertionError("Presentation layout output is malformed")
+        chart_style = json.loads((brand_dir / "presentations" / "chart-style.json").read_text(encoding="utf-8"))
+        if not chart_style.get("primary_series") or not chart_style.get("rules"):
+            raise AssertionError("Presentation chart style output is malformed")
+
         svg = (brand_dir / "exports" / "svg" / "emblem-template.svg").read_text(encoding="utf-8")
         if "<svg" not in svg or "FieldOps Pro" not in svg:
             raise AssertionError("SVG export is malformed")
@@ -125,11 +144,16 @@ def main() -> int:
             "FieldOps Pro",
             "--persist",
             "--generate-assets",
+            "--presentation-system",
+            "--deck-type",
+            "sales",
             "--output-dir",
             temp_dir,
             "--force",
         )
         assert_success(forced, "Forced persistence rerun")
+        if not (brand_dir / "presentations" / "sales-deck-outline.md").exists():
+            raise AssertionError("Forced presentation rerun did not create selected deck outline")
 
     conflict = run("test", "--brand-system", "--design-system")
     if conflict.returncode == 0:
@@ -144,6 +168,14 @@ def main() -> int:
     invalid_assets = run("test", "--brand-system", "--generate-assets")
     if invalid_assets.returncode == 0 or "requires --brand-system --persist" not in invalid_assets.stderr:
         raise AssertionError("--generate-assets without persistence should fail")
+
+    invalid_presentation = run("test", "--brand-system", "--presentation-system")
+    if invalid_presentation.returncode == 0 or "requires --brand-system --persist" not in invalid_presentation.stderr:
+        raise AssertionError("--presentation-system without persistence should fail")
+
+    invalid_deck_type = run("test", "--brand-system", "--persist", "--deck-type", "sales")
+    if invalid_deck_type.returncode == 0 or "requires --presentation-system" not in invalid_deck_type.stderr:
+        raise AssertionError("--deck-type without --presentation-system should fail")
 
     print("Brand system smoke tests passed.")
     return 0

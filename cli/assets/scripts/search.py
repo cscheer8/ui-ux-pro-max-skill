@@ -6,6 +6,7 @@ Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-r
        python search.py "<query>" --design-system [-p "Project Name"]
        python search.py "<query>" --brand-system [-p "Project Name"]
        python search.py "<query>" --brand-system --persist --generate-assets -p "Project Name" --output-dir "<project-root>"
+       python search.py "<query>" --brand-system --persist --presentation-system --deck-type pitch -p "Project Name" --output-dir "<project-root>"
        python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
        python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
 
@@ -22,6 +23,7 @@ from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, UNTRUNCATED_COLS, se
 from design_system import generate_design_system
 from brand_system import generate_brand_system
 from asset_persist import persist_asset_package
+from presentation_system import persist_presentation_system
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -81,6 +83,11 @@ def print_persistence(result: dict, label: str) -> None:
         print("\n🎨 Asset package generated:")
         for filename in asset_generation.get("created_files", []):
             print(f"   📄 {filename}")
+    presentation = result.get("presentation_generation") or {}
+    if presentation.get("status") == "created":
+        print(f"\n📊 {presentation.get('deck_type', 'presentation').title()} presentation system generated:")
+        for filename in presentation.get("created_files", []):
+            print(f"   📄 {filename}")
     print("=" * 60)
 
 
@@ -95,6 +102,8 @@ if __name__ == "__main__":
     parser.add_argument("--design-system", "-ds", action="store_true", help="Generate complete design system recommendation")
     parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
     parser.add_argument("--generate-assets", action="store_true", help="Generate provider-neutral brand briefs, prompts, and SVG exports (requires --brand-system --persist)")
+    parser.add_argument("--presentation-system", action="store_true", help="Generate a branded presentation system and deck outline (requires --brand-system --persist)")
+    parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch", help="Presentation system type (default: pitch)")
     parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
     parser.add_argument("--persist", action="store_true", help="Persist the generated design or brand system")
@@ -112,6 +121,10 @@ if __name__ == "__main__":
         parser.error("--persist requires --design-system or --brand-system")
     if args.generate_assets and not (args.brand_system and args.persist):
         parser.error("--generate-assets requires --brand-system --persist")
+    if args.presentation_system and not (args.brand_system and args.persist):
+        parser.error("--presentation-system requires --brand-system --persist")
+    if args.deck_type != "pitch" and not args.presentation_system:
+        parser.error("--deck-type requires --presentation-system")
 
     if args.brand_system:
         result = generate_brand_system(
@@ -123,12 +136,14 @@ if __name__ == "__main__":
             force=args.force,
         )
         result["asset_generation"] = persist_asset_package(result["brand_system"], result["persistence"]) if args.generate_assets else None
+        result["presentation_generation"] = persist_presentation_system(result["brand_system"], result["persistence"], args.deck_type) if args.presentation_system else None
         if args.json:
             if args.persist:
                 payload = {
                     "brand_system": result["brand_system"],
                     "persistence": result["persistence"],
                     "asset_generation": result["asset_generation"],
+                    "presentation_generation": result["presentation_generation"],
                 }
             else:
                 payload = result["brand_system"]
