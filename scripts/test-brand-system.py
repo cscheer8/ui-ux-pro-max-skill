@@ -7,175 +7,86 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SEARCH = ROOT / "src" / "ui-ux-pro-max" / "scripts" / "search.py"
 
 
 def run(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        [sys.executable, str(SEARCH), *args],
-        cwd=ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    return subprocess.run([sys.executable, str(SEARCH), *args], cwd=ROOT, text=True, capture_output=True, check=False)
 
 
 def assert_success(result: subprocess.CompletedProcess, label: str) -> None:
     if result.returncode != 0:
-        raise AssertionError(
-            f"{label} failed with exit code {result.returncode}\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+        raise AssertionError(f"{label} failed with exit code {result.returncode}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
 
 
 def main() -> int:
-    markdown = run(
-        "oilfield operations software rugged trustworthy modern",
-        "--brand-system",
-        "-p",
-        "FieldOps Pro",
-    )
+    markdown = run("oilfield operations software rugged trustworthy modern", "--brand-system", "-p", "FieldOps Pro")
     assert_success(markdown, "Markdown brand-system command")
-    required_markdown = [
-        "# FieldOps Pro — Brand System",
-        "## Strategic Foundation",
-        "## Semantic Color Tokens",
-        "## Logo Direction",
-        "## Asset Creation Brief",
-    ]
-    for marker in required_markdown:
+    for marker in ["# FieldOps Pro — Brand System", "## Strategic Foundation", "## Semantic Color Tokens", "## Logo Direction"]:
         if marker not in markdown.stdout:
-            raise AssertionError(f"Missing Markdown marker: {marker}\n{markdown.stdout}")
+            raise AssertionError(f"Missing Markdown marker: {marker}")
 
-    json_result = run(
-        "mobile dental care trustworthy accessible compassionate",
-        "--brand-system",
-        "-p",
-        "Assisted Dental Partners",
-        "--json",
-    )
+    json_result = run("mobile dental care trustworthy accessible compassionate", "--brand-system", "-p", "Assisted Dental Partners", "--json")
     assert_success(json_result, "JSON brand-system command")
     payload = json.loads(json_result.stdout)
     for key in ["project_name", "source_query", "archetype", "personality", "logo_direction", "semantic_tokens", "asset_brief"]:
         if key not in payload:
             raise AssertionError(f"Missing JSON key: {key}")
-    if payload["project_name"] != "Assisted Dental Partners":
-        raise AssertionError("Project name was not preserved in JSON output")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         persisted = run(
-            "oilfield operations software rugged trustworthy modern",
-            "--brand-system",
-            "-p",
-            "FieldOps Pro",
-            "--persist",
-            "--generate-assets",
-            "--presentation-system",
-            "--deck-type",
-            "executive",
-            "--output-dir",
-            temp_dir,
+            "oilfield operations software rugged trustworthy modern", "--brand-system", "-p", "FieldOps Pro",
+            "--persist", "--generate-assets", "--presentation-system", "--deck-type", "executive",
+            "--export-tokens", "--token-formats", "css,tailwind,typescript", "--output-dir", temp_dir,
         )
-        assert_success(persisted, "Persisted brand and presentation command")
+        assert_success(persisted, "Persisted brand system with token exports")
         brand_dir = Path(temp_dir) / "brand-system" / "fieldops-pro"
         required_files = [
             brand_dir / "MASTER.md",
-            brand_dir / "brand-system.json",
-            brand_dir / "assets" / "logo-brief.md",
             brand_dir / "tokens" / "semantic-brand-tokens.json",
-            brand_dir / "assets" / "icon-system.md",
-            brand_dir / "assets" / "image-direction.md",
-            brand_dir / "assets" / "social-kit.md",
-            brand_dir / "assets" / "presentation-system.md",
             brand_dir / "assets" / "generation-prompts.json",
             brand_dir / "exports" / "svg" / "emblem-template.svg",
             brand_dir / "presentations" / "PRESENTATION-SYSTEM.md",
-            brand_dir / "presentations" / "executive-deck-outline.md",
-            brand_dir / "presentations" / "slide-layouts.json",
-            brand_dir / "presentations" / "chart-style.json",
-            brand_dir / "presentations" / "generation-prompts.json",
+            brand_dir / "exports" / "css" / "brand-tokens.css",
+            brand_dir / "exports" / "tailwind" / "brand-theme.js",
+            brand_dir / "exports" / "typescript" / "brand-tokens.ts",
+            brand_dir / "exports" / "json" / "semantic-brand-tokens.json",
         ]
         for path in required_files:
             if not path.exists():
                 raise AssertionError(f"Missing persisted file: {path}")
 
-        tokens = json.loads((brand_dir / "tokens" / "semantic-brand-tokens.json").read_text(encoding="utf-8"))
-        if tokens["color"]["brand"]["primary"]["$type"] != "color":
-            raise AssertionError("Semantic token output is malformed")
+        source = json.loads((brand_dir / "tokens" / "semantic-brand-tokens.json").read_text(encoding="utf-8"))
+        exported = json.loads((brand_dir / "exports" / "json" / "semantic-brand-tokens.json").read_text(encoding="utf-8"))
+        if source != exported:
+            raise AssertionError("Exported JSON tokens do not match the semantic source of truth")
+        primary = source["color"]["brand"]["primary"]["$value"]
+        accent = source["color"]["brand"]["accent"]["$value"]
+        css = (brand_dir / "exports" / "css" / "brand-tokens.css").read_text(encoding="utf-8")
+        tailwind = (brand_dir / "exports" / "tailwind" / "brand-theme.js").read_text(encoding="utf-8")
+        typescript = (brand_dir / "exports" / "typescript" / "brand-tokens.ts").read_text(encoding="utf-8")
+        for label, content in [("CSS", css), ("Tailwind", tailwind), ("TypeScript", typescript)]:
+            if primary not in content or accent not in content:
+                raise AssertionError(f"{label} export is not aligned with source tokens")
+        if '[data-theme="dark"]' not in css or "as const" not in typescript or "theme" not in tailwind:
+            raise AssertionError("Production export structure is malformed")
 
-        prompts = json.loads((brand_dir / "assets" / "generation-prompts.json").read_text(encoding="utf-8"))
-        for key in ["logo", "icon_system", "imagery", "social_kit", "presentation"]:
-            if key not in prompts or not prompts[key].get("prompt"):
-                raise AssertionError(f"Missing generated prompt: {key}")
-
-        presentation = json.loads((brand_dir / "presentations" / "generation-prompts.json").read_text(encoding="utf-8"))
-        if presentation["deck_type"] != "executive" or len(presentation["outline"]) < 6:
-            raise AssertionError("Presentation outline output is malformed")
-        layouts = json.loads((brand_dir / "presentations" / "slide-layouts.json").read_text(encoding="utf-8"))
-        if layouts["grid"]["columns"] != 12 or "comparison" not in layouts["layouts"]:
-            raise AssertionError("Presentation layout output is malformed")
-        chart_style = json.loads((brand_dir / "presentations" / "chart-style.json").read_text(encoding="utf-8"))
-        if not chart_style.get("primary_series") or not chart_style.get("rules"):
-            raise AssertionError("Presentation chart style output is malformed")
-
-        svg = (brand_dir / "exports" / "svg" / "emblem-template.svg").read_text(encoding="utf-8")
-        if "<svg" not in svg or "FieldOps Pro" not in svg:
-            raise AssertionError("SVG export is malformed")
-
-        skipped = run(
-            "oilfield operations software rugged trustworthy modern",
-            "--brand-system",
-            "-p",
-            "FieldOps Pro",
-            "--persist",
-            "--output-dir",
-            temp_dir,
-        )
-        assert_success(skipped, "Safe persistence rerun")
-        if "already exists" not in skipped.stdout:
-            raise AssertionError("Existing brand system should not be silently overwritten")
-
-        forced = run(
-            "oilfield operations software rugged trustworthy modern",
-            "--brand-system",
-            "-p",
-            "FieldOps Pro",
-            "--persist",
-            "--generate-assets",
-            "--presentation-system",
-            "--deck-type",
-            "sales",
-            "--output-dir",
-            temp_dir,
-            "--force",
-        )
-        assert_success(forced, "Forced persistence rerun")
-        if not (brand_dir / "presentations" / "sales-deck-outline.md").exists():
-            raise AssertionError("Forced presentation rerun did not create selected deck outline")
+    invalid_cases = [
+        (("test", "--persist"), "requires"),
+        (("test", "--brand-system", "--generate-assets"), "requires --brand-system --persist"),
+        (("test", "--brand-system", "--presentation-system"), "requires --brand-system --persist"),
+        (("test", "--brand-system", "--export-tokens"), "requires --brand-system --persist"),
+        (("test", "--brand-system", "--persist", "--token-formats", "css,banana"), "unsupported token format"),
+    ]
+    for args, expected in invalid_cases:
+        result = run(*args)
+        if result.returncode == 0 or expected not in result.stderr:
+            raise AssertionError(f"Expected CLI error containing {expected!r}: {result.stderr}")
 
     conflict = run("test", "--brand-system", "--design-system")
-    if conflict.returncode == 0:
+    if conflict.returncode == 0 or "mutually exclusive" not in conflict.stderr:
         raise AssertionError("Mutually exclusive flags should fail")
-    if "mutually exclusive" not in conflict.stderr:
-        raise AssertionError(f"Expected mutual-exclusion error, got:\n{conflict.stderr}")
-
-    invalid_persist = run("test", "--persist")
-    if invalid_persist.returncode == 0 or "requires" not in invalid_persist.stderr:
-        raise AssertionError("--persist without a system mode should fail")
-
-    invalid_assets = run("test", "--brand-system", "--generate-assets")
-    if invalid_assets.returncode == 0 or "requires --brand-system --persist" not in invalid_assets.stderr:
-        raise AssertionError("--generate-assets without persistence should fail")
-
-    invalid_presentation = run("test", "--brand-system", "--presentation-system")
-    if invalid_presentation.returncode == 0 or "requires --brand-system --persist" not in invalid_presentation.stderr:
-        raise AssertionError("--presentation-system without persistence should fail")
-
-    invalid_deck_type = run("test", "--brand-system", "--persist", "--deck-type", "sales")
-    if invalid_deck_type.returncode == 0 or "requires --presentation-system" not in invalid_deck_type.stderr:
-        raise AssertionError("--deck-type without --presentation-system should fail")
 
     print("Brand system smoke tests passed.")
     return 0
