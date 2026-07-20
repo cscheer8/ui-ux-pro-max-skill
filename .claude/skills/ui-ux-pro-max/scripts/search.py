@@ -5,7 +5,7 @@ UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
 Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
        python search.py "<query>" --design-system [-p "Project Name"]
        python search.py "<query>" --brand-system [-p "Project Name"]
-       python search.py "<query>" --brand-system --persist -p "Project Name" --output-dir "<project-root>"
+       python search.py "<query>" --brand-system --persist --generate-assets -p "Project Name" --output-dir "<project-root>"
        python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
        python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
 
@@ -21,6 +21,7 @@ import io
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, UNTRUNCATED_COLS, search, search_stack
 from design_system import generate_design_system
 from brand_system import generate_brand_system
+from asset_persist import persist_asset_package
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -75,6 +76,11 @@ def print_persistence(result: dict, label: str) -> None:
         print(f"✅ {label.replace('-', ' ').title()} persisted to {target}/")
         for filename in persistence.get("created_files", []):
             print(f"   📄 {filename}")
+    asset_generation = result.get("asset_generation") or {}
+    if asset_generation.get("status") == "created":
+        print("\n🎨 Asset package generated:")
+        for filename in asset_generation.get("created_files", []):
+            print(f"   📄 {filename}")
     print("=" * 60)
 
 
@@ -88,6 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--full", action="store_true", help="Do not truncate long field values in text output")
     parser.add_argument("--design-system", "-ds", action="store_true", help="Generate complete design system recommendation")
     parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
+    parser.add_argument("--generate-assets", action="store_true", help="Generate provider-neutral brand briefs, prompts, and SVG exports (requires --brand-system --persist)")
     parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
     parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
     parser.add_argument("--persist", action="store_true", help="Persist the generated design or brand system")
@@ -103,6 +110,8 @@ if __name__ == "__main__":
         parser.error("--design-system and --brand-system are mutually exclusive")
     if args.persist and not (args.design_system or args.brand_system):
         parser.error("--persist requires --design-system or --brand-system")
+    if args.generate_assets and not (args.brand_system and args.persist):
+        parser.error("--generate-assets requires --brand-system --persist")
 
     if args.brand_system:
         result = generate_brand_system(
@@ -113,8 +122,16 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             force=args.force,
         )
+        result["asset_generation"] = persist_asset_package(result["brand_system"], result["persistence"]) if args.generate_assets else None
         if args.json:
-            payload = {"brand_system": result["brand_system"], "persistence": result["persistence"]} if args.persist else result["brand_system"]
+            if args.persist:
+                payload = {
+                    "brand_system": result["brand_system"],
+                    "persistence": result["persistence"],
+                    "asset_generation": result["asset_generation"],
+                }
+            else:
+                payload = result["brand_system"]
             print(json_module.dumps(payload, indent=2, ensure_ascii=False))
         else:
             print(result["text"])
