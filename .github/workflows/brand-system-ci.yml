@@ -1,0 +1,39 @@
+name: Brand System CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - feat/brand-system
+
+permissions:
+  contents: read
+
+jobs:
+  brand-system:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate CSV data
+        run: python scripts/validate-csv.py
+
+      - name: Run brand system smoke tests
+        run: python scripts/test-brand-system.py
+
+      - name: Compile Python modules
+        run: |
+          python -m py_compile src/ui-ux-pro-max/scripts/core.py
+          python -m py_compile src/ui-ux-pro-max/scripts/design_system.py
+          python -m py_compile src/ui-ux-pro-max/scripts/brand_system.py
+          python -m py_compile src/ui-ux-pro-max/scripts/search.py
