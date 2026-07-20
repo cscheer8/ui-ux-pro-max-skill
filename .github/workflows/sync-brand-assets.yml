@@ -3,8 +3,7 @@ name: Sync Brand Assets
 on:
   push:
     branches:
-      - 'feat/brand-*'
-      - 'feat/presentation-*'
+      - 'feat/**'
   workflow_dispatch:
 
 permissions:
@@ -38,5 +37,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add cli/assets .claude/skills/ui-ux-pro-max
-          git commit -m "chore: synchronize generated brand assets"
+          git commit -m "chore: synchronize generated skill assets"
           git push origin HEAD:${{ github.ref_name }}
