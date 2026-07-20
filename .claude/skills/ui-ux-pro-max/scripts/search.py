@@ -1,49 +1,36 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-UI/UX Pro Max Search - BM25 search engine for UI/UX style guides
-Usage: python search.py "<query>" [--domain <domain>] [--stack <stack>] [--max-results 3]
-       python search.py "<query>" --design-system [-p "Project Name"]
-       python search.py "<query>" --brand-system [-p "Project Name"]
-       python search.py "<query>" --brand-system --persist --generate-assets -p "Project Name" --output-dir "<project-root>"
-       python search.py "<query>" --brand-system --persist --presentation-system --deck-type pitch -p "Project Name" --output-dir "<project-root>"
-       python search.py "<query>" --design-system --persist [-p "Project Name"] --output-dir "<project-root>" [--page "dashboard"]
-       python search.py "<query>" --design-system --variance 8 --motion 9 --density 7
-
-Domains: style, color, chart, landing, product, ux, typography, google-fonts, icons, gsap, react, web
-Stacks: react, nextjs, vue, svelte, astro, swiftui, react-native, flutter, nuxtjs, nuxt-ui,
-        html-tailwind, shadcn, jetpack-compose, threejs, angular, laravel
-"""
+"""UI/UX Pro Max search and system generation CLI."""
 
 import argparse
+import io
 import json as json_module
 import sys
-import io
+
 from core import CSV_CONFIG, AVAILABLE_STACKS, MAX_RESULTS, UNTRUNCATED_COLS, search, search_stack
 from design_system import generate_design_system
 from brand_system import generate_brand_system
 from asset_persist import persist_asset_package
 from presentation_system import persist_presentation_system
+from token_exports import SUPPORTED_FORMATS, export_tokens
 
-if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 TRUNCATE_AT = 300
 
 
 def format_output(result, full=False):
-    """Format results for Claude consumption (token-optimized)."""
     if "error" in result:
         return f"Error: {result['error']}"
     output = []
     if result.get("stack"):
-        output.append("## UI Pro Max Stack Guidelines")
-        output.append(f"**Stack:** {result['stack']} | **Query:** {result['query']}")
+        output.extend(["## UI Pro Max Stack Guidelines", f"**Stack:** {result['stack']} | **Query:** {result['query']}"])
     else:
         output.append("## UI Pro Max Search Results")
-        domain_note = result['domain']
+        domain_note = result["domain"]
         if result.get("auto_detected"):
             domain_note += " (auto-detected"
             if result.get("runner_up_domain"):
@@ -51,14 +38,13 @@ def format_output(result, full=False):
             domain_note += ")"
         output.append(f"**Domain:** {domain_note} | **Query:** {result['query']}")
     output.append(f"**Source:** {result['file']} | **Found:** {result['count']} results\n")
-    if result['count'] == 0:
-        output.append("No matches. This is not a match with an empty value -- the query did not hit the database. Retry with broader/different keywords before falling back to general defaults, and say explicitly that no database match was found if you do fall back.")
-        suggestions = result.get("suggestions") or []
-        if suggestions:
-            output.append(f"**Closest known terms:** {', '.join(suggestions)}")
+    if result["count"] == 0:
+        output.append("No matches. Retry with broader or different keywords before falling back to general defaults.")
+        if result.get("suggestions"):
+            output.append(f"**Closest known terms:** {', '.join(result['suggestions'])}")
         return "\n".join(output)
-    for i, row in enumerate(result['results'], 1):
-        output.append(f"### Result {i}")
+    for index, row in enumerate(result["results"], 1):
+        output.append(f"### Result {index}")
         for key, value in row.items():
             value_str = str(value)
             if not full and key not in UNTRUNCATED_COLS and len(value_str) > TRUNCATE_AT:
@@ -78,41 +64,52 @@ def print_persistence(result: dict, label: str) -> None:
         print(f"✅ {label.replace('-', ' ').title()} persisted to {target}/")
         for filename in persistence.get("created_files", []):
             print(f"   📄 {filename}")
-    asset_generation = result.get("asset_generation") or {}
-    if asset_generation.get("status") == "created":
-        print("\n🎨 Asset package generated:")
-        for filename in asset_generation.get("created_files", []):
-            print(f"   📄 {filename}")
-    presentation = result.get("presentation_generation") or {}
-    if presentation.get("status") == "created":
-        print(f"\n📊 {presentation.get('deck_type', 'presentation').title()} presentation system generated:")
-        for filename in presentation.get("created_files", []):
-            print(f"   📄 {filename}")
+    sections = [
+        ("asset_generation", "🎨 Asset package generated"),
+        ("presentation_generation", "📊 Presentation system generated"),
+        ("token_exports", "🧩 Production token exports generated"),
+    ]
+    for key, heading in sections:
+        generated = result.get(key) or {}
+        if generated.get("status") == "created":
+            print(f"\n{heading}:")
+            for filename in generated.get("created_files", []):
+                print(f"   📄 {filename}")
     print("=" * 60)
+
+
+def parse_formats(raw: str) -> list[str]:
+    formats = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    unknown = [item for item in formats if item not in SUPPORTED_FORMATS]
+    if unknown:
+        raise argparse.ArgumentTypeError(f"unsupported token format(s): {', '.join(unknown)}")
+    return formats
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UI Pro Max Search")
     parser.add_argument("query", help="Search query")
     parser.add_argument("--domain", "-d", choices=list(CSV_CONFIG.keys()), help="Search domain")
-    parser.add_argument("--stack", "-s", choices=AVAILABLE_STACKS, help=f"Stack-specific search. Available: {', '.join(AVAILABLE_STACKS)}")
-    parser.add_argument("--max-results", "-n", type=int, default=MAX_RESULTS, help="Max results (default: 3)")
-    parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument("--full", action="store_true", help="Do not truncate long field values in text output")
-    parser.add_argument("--design-system", "-ds", action="store_true", help="Generate complete design system recommendation")
-    parser.add_argument("--brand-system", "-bs", action="store_true", help="Generate an independent brand identity system recommendation")
-    parser.add_argument("--generate-assets", action="store_true", help="Generate provider-neutral brand briefs, prompts, and SVG exports (requires --brand-system --persist)")
-    parser.add_argument("--presentation-system", action="store_true", help="Generate a branded presentation system and deck outline (requires --brand-system --persist)")
-    parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch", help="Presentation system type (default: pitch)")
-    parser.add_argument("--project-name", "-p", type=str, default=None, help="Project name for design or brand system output")
-    parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii", help="Output format for design system (ignored if --json)")
-    parser.add_argument("--persist", action="store_true", help="Persist the generated design or brand system")
-    parser.add_argument("--page", type=str, default=None, help="Create page-specific override file for a design system")
-    parser.add_argument("--output-dir", "-o", type=str, default=None, help="Project root under which the system folder is created")
-    parser.add_argument("--force", action="store_true", help="Overwrite an existing persisted system")
-    parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10", help="DESIGN_VARIANCE dial (only with --design-system)")
-    parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10", help="MOTION_INTENSITY dial (only with --design-system)")
-    parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10", help="VISUAL_DENSITY dial (only with --design-system)")
+    parser.add_argument("--stack", "-s", choices=AVAILABLE_STACKS, help="Stack-specific search")
+    parser.add_argument("--max-results", "-n", type=int, default=MAX_RESULTS)
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--full", action="store_true")
+    parser.add_argument("--design-system", "-ds", action="store_true")
+    parser.add_argument("--brand-system", "-bs", action="store_true")
+    parser.add_argument("--generate-assets", action="store_true")
+    parser.add_argument("--presentation-system", action="store_true")
+    parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch")
+    parser.add_argument("--export-tokens", action="store_true", help="Export persisted semantic tokens for production use")
+    parser.add_argument("--token-formats", type=parse_formats, default=list(SUPPORTED_FORMATS), help="Comma-separated: css,tailwind,typescript")
+    parser.add_argument("--project-name", "-p", default=None)
+    parser.add_argument("--format", "-f", choices=["ascii", "markdown"], default="ascii")
+    parser.add_argument("--persist", action="store_true")
+    parser.add_argument("--page", default=None)
+    parser.add_argument("--output-dir", "-o", default=None)
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--variance", type=int, choices=range(1, 11), metavar="1-10")
+    parser.add_argument("--motion", type=int, choices=range(1, 11), metavar="1-10")
+    parser.add_argument("--density", type=int, choices=range(1, 11), metavar="1-10")
     args = parser.parse_args()
 
     if args.design_system and args.brand_system:
@@ -125,28 +122,20 @@ if __name__ == "__main__":
         parser.error("--presentation-system requires --brand-system --persist")
     if args.deck_type != "pitch" and not args.presentation_system:
         parser.error("--deck-type requires --presentation-system")
+    if args.export_tokens and not (args.brand_system and args.persist):
+        parser.error("--export-tokens requires --brand-system --persist")
 
     if args.brand_system:
-        result = generate_brand_system(
-            args.query,
-            args.project_name,
-            output_format="json" if args.json else "markdown",
-            persist=args.persist,
-            output_dir=args.output_dir,
-            force=args.force,
-        )
+        result = generate_brand_system(args.query, args.project_name, output_format="json" if args.json else "markdown", persist=args.persist, output_dir=args.output_dir, force=args.force)
         result["asset_generation"] = persist_asset_package(result["brand_system"], result["persistence"]) if args.generate_assets else None
         result["presentation_generation"] = persist_presentation_system(result["brand_system"], result["persistence"], args.deck_type) if args.presentation_system else None
+        result["token_exports"] = export_tokens(result["brand_system"], result["persistence"], args.token_formats) if args.export_tokens else None
         if args.json:
-            if args.persist:
-                payload = {
-                    "brand_system": result["brand_system"],
-                    "persistence": result["persistence"],
-                    "asset_generation": result["asset_generation"],
-                    "presentation_generation": result["presentation_generation"],
-                }
-            else:
-                payload = result["brand_system"]
+            payload = result["brand_system"] if not args.persist else {
+                "brand_system": result["brand_system"], "persistence": result["persistence"],
+                "asset_generation": result["asset_generation"], "presentation_generation": result["presentation_generation"],
+                "token_exports": result["token_exports"],
+            }
             print(json_module.dumps(payload, indent=2, ensure_ascii=False))
         else:
             print(result["text"])
