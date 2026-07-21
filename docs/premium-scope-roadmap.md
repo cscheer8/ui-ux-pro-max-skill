@@ -36,12 +36,12 @@ A commercial service benefit such as priority support is not a reproducible soft
 | Target capability | Status | Current implementation | Remaining work |
 |---|---|---|---|
 | Brand identity systems | Complete | Archetype, personality, voice, visual direction, semantic colors, typography, anti-patterns, persistent Markdown and JSON outputs | Real-world quality review and refinement only |
-| Logo design and logo systems | Partial | Logo direction dataset, logo brief, generation prompts, deterministic editable SVG emblem template | Generate finished logo concepts and variants through a provider adapter; add approval/regeneration workflow |
+| Logo design and logo systems | Partial | Logo direction dataset, logo brief, generation prompts, deterministic editable SVG emblem template, and provider-backed concept rendering | Add coordinated logo variants, approval workflow, small-size validation, and vector-ready finalization |
 | Corporate identity programs | Partial | Persistent brand package, asset briefs, semantic tokens, social guidance, presentation rules | Add coordinated stationery/collateral specifications such as letterhead, business card, email signature, document cover, and usage standards |
-| Banner and campaign graphics | Partial | Social-kit brief and provider-neutral prompts | Add explicit banner families, dimensions, safe areas, copy hierarchy, campaign variants, and finished-asset generation |
+| Banner and campaign graphics | Partial | Social-kit brief, provider-neutral prompts, and provider-backed visual rendering | Add explicit banner families, dimensions, safe areas, copy hierarchy, and campaign variants |
 | Presentation-slide design | Complete for structured guidance; partial for finished files | Pitch, sales, executive, training, and status deck systems; layouts, chart rules, outlines, and prompts | Optional direct PPTX/Canva/Figma export; finished graphic generation |
-| Custom iconography | Partial | Icon-system brief and prompts | Generate a consistent icon set, export individual SVG files, and validate stroke/grid consistency |
-| AI-powered image generation | Missing as an executed capability | Provider-neutral prompts and imagery direction only | Add at least one provider adapter, asset manifest, file saving, retry/regeneration, and provenance metadata |
+| Custom iconography | Partial | Icon-system brief, prompts, and provider-backed icon-sheet rendering | Generate a consistent family of individual SVG icons and validate stroke/grid consistency |
+| AI-powered image generation | Complete | Provider-neutral interface, working OpenAI image provider, explicit paid execution flag, saved image files, retries, append-only manifest, hashes, prompt/provenance metadata, and regeneration lineage | Optional additional providers, streaming progress, and edit/inpainting workflows |
 | Enterprise design-token architecture | Partial | DTCG-style semantic tokens plus CSS, Tailwind, TypeScript, and JSON exports | Add multi-brand inheritance, parent/child themes, overrides, versioning, migrations, and governance metadata |
 | Release documentation and workflow polish | Partial | Command guide, complete-package command, tests, CI, overwrite protection, release checklist | Replace project-specific examples, add neutral sample packages, installation/upgrade guide, changelog, versioning, and stable release packaging |
 
@@ -89,11 +89,23 @@ A commercial service benefit such as priority support is not a reproducible soft
 
 **Classification:** Supporting and on-target. Project-specific examples must be replaced with neutral examples.
 
+### PR #8 — Premium Scope Reconciliation
+
+**Roadmap mapping:** Governance across all original target capabilities.
+
+**Classification:** Core project-control correction.
+
+### PR #9 — Executed AI Image Generation
+
+**Roadmap mapping:** AI-powered image generation; supporting execution for logos, iconography, imagery, and campaign graphics.
+
+**Classification:** Core and on-target.
+
 ## Corrected priority order
 
 The remaining work should proceed in this order:
 
-1. **Executed AI image generation**
+1. **Executed AI image generation — implemented in PR #9**
    - Provider-neutral adapter interface
    - One working provider implementation
    - Generated asset manifest
@@ -101,7 +113,7 @@ The remaining work should proceed in this order:
    - Retry and regeneration flow
    - Provenance and prompt metadata
 
-2. **Finished logo and icon outputs**
+2. **Finished logo and icon outputs — next active priority**
    - Logo concept variants
    - Horizontal, stacked, emblem, monochrome, and small-size variants
    - Custom icon family exports as SVG

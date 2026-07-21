@@ -37,6 +37,9 @@ jobs:
       - name: Run complete package smoke test
         run: python scripts/test-release-workflow.py
 
+      - name: Run executed image generation smoke test
+        run: python scripts/test-image-execution.py
+
       - name: Compile Python modules
         run: |
           python -m py_compile src/ui-ux-pro-max/scripts/core.py
@@ -45,4 +48,5 @@ jobs:
           python -m py_compile src/ui-ux-pro-max/scripts/brand_audit.py
           python -m py_compile src/ui-ux-pro-max/scripts/token_exports.py
           python -m py_compile src/ui-ux-pro-max/scripts/presentation_system.py
+          python -m py_compile src/ui-ux-pro-max/scripts/image_execution.py
           python -m py_compile src/ui-ux-pro-max/scripts/search.py
