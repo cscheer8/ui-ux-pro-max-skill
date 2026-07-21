@@ -43,6 +43,9 @@ jobs:
       - name: Run logo and icon system smoke test
         run: python scripts/test-logo-icon-system.py
 
+      - name: Run corporate identity and banner smoke test
+        run: python scripts/test-corporate-identity.py
+
       - name: Compile Python modules
         run: |
           python -m py_compile src/ui-ux-pro-max/scripts/core.py
@@ -54,4 +57,6 @@ jobs:
           python -m py_compile src/ui-ux-pro-max/scripts/image_execution.py
           python -m py_compile src/ui-ux-pro-max/scripts/logo_icon_system.py
           python -m py_compile src/ui-ux-pro-max/scripts/export_identity.py
+          python -m py_compile src/ui-ux-pro-max/scripts/corporate_identity.py
+          python -m py_compile src/ui-ux-pro-max/scripts/export_corporate_identity.py
           python -m py_compile src/ui-ux-pro-max/scripts/search.py
