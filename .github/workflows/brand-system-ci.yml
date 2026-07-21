@@ -46,6 +46,9 @@ jobs:
       - name: Run corporate identity and banner smoke test
         run: python scripts/test-corporate-identity.py
 
+      - name: Run enterprise token architecture smoke test
+        run: python scripts/test-enterprise-tokens.py
+
       - name: Compile Python modules
         run: |
           python -m py_compile src/ui-ux-pro-max/scripts/core.py
@@ -59,4 +62,6 @@ jobs:
           python -m py_compile src/ui-ux-pro-max/scripts/export_identity.py
           python -m py_compile src/ui-ux-pro-max/scripts/corporate_identity.py
           python -m py_compile src/ui-ux-pro-max/scripts/export_corporate_identity.py
+          python -m py_compile src/ui-ux-pro-max/scripts/enterprise_tokens.py
+          python -m py_compile src/ui-ux-pro-max/scripts/export_enterprise_tokens.py
           python -m py_compile src/ui-ux-pro-max/scripts/search.py
