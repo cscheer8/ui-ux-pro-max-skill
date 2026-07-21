@@ -14,6 +14,14 @@ from asset_persist import persist_asset_package
 from presentation_system import persist_presentation_system
 from token_exports import SUPPORTED_FORMATS, export_tokens
 from brand_audit import audit_brand_system
+from image_execution import (
+    SUPPORTED_IMAGE_TYPES,
+    SUPPORTED_OUTPUT_FORMATS,
+    SUPPORTED_QUALITIES,
+    SUPPORTED_SIZES,
+    execute_image_generation,
+    get_provider,
+)
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
@@ -66,7 +74,8 @@ def print_persistence(result: dict, label: str) -> None:
         for filename in persistence.get("created_files", []):
             print(f"   📄 {filename}")
     sections = [
-        ("asset_generation", "🎨 Asset package generated"),
+        ("asset_generation", "🎨 Asset briefs and prompts generated"),
+        ("image_execution", "🖼️ Finished image assets generated"),
         ("presentation_generation", "📊 Presentation system generated"),
         ("token_exports", "🧩 Production token exports generated"),
     ]
@@ -93,6 +102,14 @@ def parse_formats(raw: str) -> list[str]:
     return formats
 
 
+def parse_image_types(raw: str) -> list[str]:
+    image_types = [item.strip().lower().replace("-", "_") for item in raw.split(",") if item.strip()]
+    unknown = [item for item in image_types if item not in SUPPORTED_IMAGE_TYPES]
+    if unknown:
+        raise argparse.ArgumentTypeError(f"unsupported image type(s): {', '.join(unknown)}")
+    return image_types
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UI Pro Max Search")
     parser.add_argument("query", help="Search query")
@@ -104,7 +121,16 @@ if __name__ == "__main__":
     parser.add_argument("--design-system", "-ds", action="store_true")
     parser.add_argument("--brand-system", "-bs", action="store_true")
     parser.add_argument("--complete-brand-package", action="store_true", help="Generate the persisted brand system, asset briefs, presentation system, and all token exports")
-    parser.add_argument("--generate-assets", action="store_true")
+    parser.add_argument("--generate-assets", action="store_true", help="Generate provider-neutral briefs and prompts; does not call an image provider")
+    parser.add_argument("--render-assets", action="store_true", help="Call an image provider and save finished generated image files")
+    parser.add_argument("--image-provider", choices=["openai"], default="openai")
+    parser.add_argument("--image-types", type=parse_image_types, default=list(SUPPORTED_IMAGE_TYPES), help="Comma-separated: logo,icon_system,imagery,social_kit")
+    parser.add_argument("--image-model", default="gpt-image-1")
+    parser.add_argument("--image-size", choices=SUPPORTED_SIZES, default="1024x1024")
+    parser.add_argument("--image-quality", choices=SUPPORTED_QUALITIES, default="auto")
+    parser.add_argument("--image-format", choices=SUPPORTED_OUTPUT_FORMATS, default="png")
+    parser.add_argument("--image-attempts", type=int, default=3)
+    parser.add_argument("--regenerate-from", default=None, help="Prior asset_id recorded as the source of a regeneration")
     parser.add_argument("--presentation-system", action="store_true")
     parser.add_argument("--deck-type", choices=["pitch", "sales", "executive", "training", "status"], default="pitch")
     parser.add_argument("--export-tokens", action="store_true", help="Export persisted semantic tokens for production use")
@@ -128,6 +154,8 @@ if __name__ == "__main__":
         args.generate_assets = True
         args.presentation_system = True
         args.export_tokens = True
+    if args.render_assets:
+        args.generate_assets = True
 
     if args.design_system and args.brand_system:
         parser.error("--design-system and --brand-system are mutually exclusive")
@@ -135,6 +163,12 @@ if __name__ == "__main__":
         parser.error("--persist requires --design-system or --brand-system")
     if args.generate_assets and not (args.brand_system and args.persist):
         parser.error("--generate-assets requires --brand-system --persist")
+    if args.render_assets and not (args.brand_system and args.persist):
+        parser.error("--render-assets requires --brand-system --persist")
+    if args.image_attempts < 1:
+        parser.error("--image-attempts must be at least 1")
+    if args.regenerate_from and not args.render_assets:
+        parser.error("--regenerate-from requires --render-assets")
     if args.presentation_system and not (args.brand_system and args.persist):
         parser.error("--presentation-system requires --brand-system --persist")
     if args.deck_type != "pitch" and not args.presentation_system:
@@ -149,6 +183,23 @@ if __name__ == "__main__":
     if args.brand_system:
         result = generate_brand_system(args.query, args.project_name, output_format="json" if args.json else "markdown", persist=args.persist, output_dir=args.output_dir, force=args.force)
         result["asset_generation"] = persist_asset_package(result["brand_system"], result["persistence"]) if args.generate_assets else None
+        result["image_execution"] = None
+        if args.render_assets:
+            try:
+                result["image_execution"] = execute_image_generation(
+                    result["brand_system"],
+                    result["persistence"],
+                    provider=get_provider(args.image_provider),
+                    image_types=args.image_types,
+                    model=args.image_model,
+                    size=args.image_size,
+                    quality=args.image_quality,
+                    output_format=args.image_format,
+                    attempts=args.image_attempts,
+                    regenerate_from=args.regenerate_from,
+                )
+            except (RuntimeError, ValueError) as exc:
+                parser.error(str(exc))
         result["presentation_generation"] = persist_presentation_system(result["brand_system"], result["persistence"], args.deck_type) if args.presentation_system else None
         result["token_exports"] = export_tokens(result["brand_system"], result["persistence"], args.token_formats) if args.export_tokens else None
         result["brand_audit"] = audit_brand_system(result["brand_system"], result["persistence"], args.audit_path) if args.audit_brand else None
@@ -157,6 +208,7 @@ if __name__ == "__main__":
                 "brand_system": result["brand_system"],
                 "persistence": result["persistence"],
                 "asset_generation": result["asset_generation"],
+                "image_execution": result["image_execution"],
                 "presentation_generation": result["presentation_generation"],
                 "token_exports": result["token_exports"],
                 "brand_audit": result["brand_audit"],
