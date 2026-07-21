@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "reference_brand": "Northstar Mobility",
+  "fictional": true,
+  "query": "regional mobility platform dependable clear modern accessible",
+  "expected_capabilities": [
+    "brand-system",
+    "asset-briefs",
+    "presentation-system",
+    "production-token-exports",
+    "logo-and-icon-exports",
+    "corporate-identity-and-banners",
+    "enterprise-token-architecture",
+    "brand-audit"
+  ],
+  "paid_image_generation": "explicit-opt-in",
+  "external_project_specific": false
+}
